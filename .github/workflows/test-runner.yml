@@ -10,7 +10,7 @@ on:
       - develop
 
 env:
-  UNITY_VERSION: 2023.2.3f1  # Closest available to Unity 6 in Game CI
+  UNITY_VERSION: auto  # Auto-detect from ProjectSettings/ProjectVersion.txt (6000.3.3f1)
   PROJECT_PATH: .
 
 jobs:
