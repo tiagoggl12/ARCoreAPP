@@ -82,45 +82,49 @@ jobs:
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
 
-      - name: Commit Xcode Project to xcode-project Branch
+      - name: Push Xcode Project to xcode-project Branch
         if: github.event.inputs.push_to_branch == 'true' || github.event_name == 'push'
         run: |
-          # Fetch or create xcode-project branch
-          git fetch origin xcode-project:xcode-project || git branch xcode-project
-          git checkout xcode-project
+          # Create a fresh orphan branch (no history, no files)
+          git checkout --orphan xcode-project-temp
 
-          # Remove ALL Unity project files (keep only .git directory)
-          find . -maxdepth 1 ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} + 2>/dev/null || true
+          # Remove everything from git staging
+          git rm -rf . || true
 
-          # Copy ONLY the Xcode project
-          mkdir -p ios-build
-          cp -r ${{ env.XCODE_PROJECT_PATH }}/* ios-build/
+          # Copy ONLY the generated iOS build files
+          cp -r ${{ env.XCODE_PROJECT_PATH }}/. .
 
-          # Create README for this branch
+          # Create README explaining this branch
           cat > README.md << 'EOF'
-          # Xcode Project Branch
+          # Xcode Project for Xcode Cloud
 
-          This branch contains ONLY the generated Xcode project for Xcode Cloud.
+          This branch contains ONLY the Xcode project generated from Unity.
 
-          **DO NOT manually edit this branch.**
+          **Generated automatically by GitHub Actions - DO NOT edit manually**
 
-          ## Contents
-          - `ios-build/` - Generated Xcode project from Unity
-
-          ## Xcode Cloud Setup
+          ## Xcode Cloud Configuration
           - Branch: `xcode-project`
-          - Project: `ios-build/Unity-iPhone.xcodeproj`
+          - Project: `Unity-iPhone.xcodeproj`
           - Scheme: `Unity-iPhone`
+
+          ## How it works
+          1. Changes pushed to `main` branch trigger Unity build
+          2. Unity exports iOS project to this branch
+          3. Xcode Cloud detects changes and builds for TestFlight
           EOF
 
-          # Stage all changes (additions and deletions)
+          # Stage all files
           git add -A
 
-          # Commit
-          git commit -m "Update Xcode project from Unity (build ${{ github.run_number }})" || echo "No changes to commit"
+          # Commit with build info
+          git commit -m "iOS build ${{ github.run_number }} from Unity
 
-          # Push to branch
-          git push origin xcode-project
+          Generated Xcode project for TestFlight deployment.
+          Unity version: ${{ env.UNITY_VERSION }}
+          Build version: ${{ steps.version.outputs.BUILD_VERSION }}"
+
+          # Force push to replace xcode-project branch completely
+          git push -f origin xcode-project-temp:xcode-project
 
       - name: Return License
         if: always()
