@@ -1,250 +1,53 @@
-name: Android CI/CD Pipeline
+name: Actions 😎
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build Type'
-        required: true
-        default: 'APK'
-        type: choice
-        options:
-          - APK
-          - AAB
-          - Both
-      version_override:
-        description: 'Version Override (leave empty for auto)'
-        required: false
-        type: string
-      skip_tests:
-        description: 'Skip Tests'
-        required: false
-        default: false
-        type: boolean
-
-env:
-  UNITY_VERSION: auto
-  PROJECT_PATH: .
-  BUILD_NAME: BugabooXR
+on: [push, pull_request]
 
 jobs:
-  # ============================================
-  # Job 1: Lint (rápido, sem Unity)
-  # ============================================
-  lint:
-    name: C# Code Quality
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Check Code Formatting
-        run: |
-          if ls *.sln 1> /dev/null 2>&1; then
-            dotnet format *.sln --verify-no-changes --verbosity diagnostic || echo "::warning::Formatting issues found"
-          fi
-
-  # ============================================
-  # Job 2: Setup - Prepara cache da Library
-  # ============================================
-  setup:
-    name: Setup Unity Cache
-    runs-on: ubuntu-latest
-    outputs:
-      cache-key: ${{ steps.cache-key.outputs.key }}
-      version: ${{ steps.version.outputs.VERSION }}
-      version-code: ${{ steps.version.outputs.VERSION_CODE }}
-      build-version: ${{ steps.version.outputs.BUILD_VERSION }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          lfs: true
-
-      - name: Generate Cache Key
-        id: cache-key
-        run: |
-          KEY="Library-v2-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}"
-          echo "key=${KEY}" >> $GITHUB_OUTPUT
-
-      - name: Set Build Version
-        id: version
-        run: |
-          if [ -n "${{ github.event.inputs.version_override }}" ]; then
-            VERSION="${{ github.event.inputs.version_override }}"
-          else
-            VERSION="1.0.0"
-          fi
-          VERSION_CODE=$((1000000 + ${{ github.run_number }}))
-          BUILD_VERSION="${VERSION}+${VERSION_CODE}"
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_OUTPUT
-          echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_OUTPUT
-
-  # ============================================
-  # Job 3: Testes Consolidados (EditMode + PlayMode)
-  # ============================================
-  test:
-    name: Unity Tests
-    runs-on: ubuntu-latest
-    needs: [lint, setup]
-    if: ${{ github.event.inputs.skip_tests != 'true' }}
-    steps:
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: ${{ needs.setup.outputs.cache-key }}
-          restore-keys: |
-            Library-v2-
-            Library-
-
-      - name: Run Edit Mode Tests
-        uses: game-ci/unity-test-runner@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: ${{ env.PROJECT_PATH }}
-          unityVersion: ${{ env.UNITY_VERSION }}
-          testMode: EditMode
-          artifactsPath: test-results/editmode
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-          checkName: Edit Mode Tests
-
-      - name: Run Play Mode Tests
-        uses: game-ci/unity-test-runner@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: ${{ env.PROJECT_PATH }}
-          unityVersion: ${{ env.UNITY_VERSION }}
-          testMode: PlayMode
-          artifactsPath: test-results/playmode
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-          checkName: Play Mode Tests
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: test-results/
-          retention-days: 14
-
-  # ============================================
-  # Job 4: Validação + Build (consolidado)
-  # ============================================
   build:
-    name: Build ${{ matrix.build_type }}
+    name: Build my project ✨
     runs-on: ubuntu-latest
-    needs: [setup, test]
-    # Roda mesmo se test foi pulado (skip_tests) ou se test passou
-    if: |
-      always() &&
-      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
-      needs.setup.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # APK build
-          - build_type: APK
-            app_bundle: false
-            condition_check: APK
-            retention: 30
-          # AAB build
-          - build_type: AAB
-            app_bundle: true
-            condition_check: AAB
-            retention: 90
     steps:
-      # Verifica se deve rodar este build type
-      - name: Check if should run
-        id: should_run
+      # Checkout (without LFS)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Git LFS
+      - name: Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@v3
+        id: lfs-cache
+        with:
+          path: .git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: Git LFS Pull
         run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type }}"
-          MATRIX_TYPE="${{ matrix.condition_check }}"
-          
-          if [ "${{ github.event_name }}" == "push" ]; then
-            echo "run=true" >> $GITHUB_OUTPUT
-          elif [ "$BUILD_TYPE" == "Both" ] || [ "$BUILD_TYPE" == "$MATRIX_TYPE" ]; then
-            echo "run=true" >> $GITHUB_OUTPUT
-          else
-            echo "run=false" >> $GITHUB_OUTPUT
-          fi
+          git lfs pull
+          git add .
+          git reset --hard
 
-      - name: Free Disk Space
-        if: steps.should_run.outputs.run == 'true'
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
-      - uses: actions/checkout@v4
-        if: steps.should_run.outputs.run == 'true'
-        with:
-          fetch-depth: 0
-          lfs: true
-
-      - name: Cache Unity Library
-        if: steps.should_run.outputs.run == 'true'
-        uses: actions/cache@v4
+      # Cache
+      - uses: actions/cache@v3
         with:
           path: Library
-          key: ${{ needs.setup.outputs.cache-key }}
+          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
-            Library-v2-
             Library-
 
-      - name: Decode Android Keystore
-        if: steps.should_run.outputs.run == 'true'
+      # Test
+      - name: Run tests
+        uses: game-ci/unity-test-runner@v4
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/user.keystore
-            echo "✅ Keystore decoded"
-          elif [ "${{ matrix.build_type }}" == "AAB" ]; then
-            echo "❌ Keystore required for AAB"
-            exit 1
-          else
-            echo "⚠️ No keystore, using debug signing"
-          fi
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Android ${{ matrix.build_type }}
-        if: steps.should_run.outputs.run == 'true'
+      # Build
+      - name: Build project
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -252,92 +55,9 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           targetPlatform: Android
-          unityVersion: ${{ env.UNITY_VERSION }}
-          buildName: ${{ env.BUILD_NAME }}
-          buildsPath: builds
-          androidExportType: ${{ matrix.androidExportType }}
-          androidKeystoreName: user.keystore
-          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
-          androidKeyaliasName: ${{ secrets.ANDROID_KEY_ALIAS }}
-          androidKeyaliasPass: ${{ secrets.ANDROID_KEY_PASS }}
-          androidTargetSdkVersion: AndroidApiLevel30
-          versioning: Custom
-          version: ${{ needs.setup.outputs.version }}
-          androidVersionCode: ${{ needs.setup.outputs.version-code }}
 
-      - name: Upload ${{ matrix.build_type }} Artifact
-        if: steps.should_run.outputs.run == 'true'
-        uses: actions/upload-artifact@v4
+      # Output
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.BUILD_NAME }}-${{ needs.setup.outputs.build-version }}-${{ matrix.build_type }}
-          path: builds/Android/*.${{ matrix.build_type == 'APK' && 'apk' || 'aab' }}
-          retention-days: ${{ matrix.retention }}
-
-  # ============================================
-  # Job 5: Release
-  # ============================================
-  release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: [setup, build]
-    if: |
-      github.event_name == 'push' && 
-      github.ref == 'refs/heads/main' &&
-      needs.build.result == 'success'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: ${{ env.BUILD_NAME }}-*
-
-      - name: Generate Changelog
-        run: |
-          {
-            echo "## Changes in this Release"
-            echo ""
-            git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")..HEAD || echo "- Initial release"
-            echo ""
-            echo "## Build Information"
-            echo "- **Version:** ${{ needs.setup.outputs.build-version }}"
-            echo "- **Unity:** ${{ env.UNITY_VERSION }}"
-            echo "- **Build:** #${{ github.run_number }}"
-            echo "- **Commit:** ${{ github.sha }}"
-          } > changelog.md
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.setup.outputs.build-version }}
-          name: Release v${{ needs.setup.outputs.build-version }}
-          body_path: changelog.md
-          draft: false
-          prerelease: false
-          files: |
-            artifacts/**/*.apk
-            artifacts/**/*.aab
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ============================================
-  # Job 6: Cleanup
-  # ============================================
-  cleanup:
-    name: Return Unity License
-    runs-on: ubuntu-latest
-    needs: [build]
-    if: always()
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Return License
-        uses: game-ci/unity-return-license@v2
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          name: Build
+          path: build
