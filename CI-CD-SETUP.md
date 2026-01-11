@@ -1,6 +1,6 @@
-# CI/CD Setup Guide - ARCoreAPP
+# CI/CD Setup Guide - BugabooXR
 
-Este guia contém todas as instruções para configurar e usar o pipeline CI/CD do projeto ARCoreAPP.
+Este guia contém todas as instruções para configurar e usar o pipeline CI/CD do projeto BugabooXR.
 
 ## Índice
 
@@ -188,7 +188,7 @@ ANDROID_KEY_PASS            Updated X days ago
 2. **App Store Connect**:
    - Acesse https://appstoreconnect.apple.com
    - Crie uma nova app:
-     - Nome: ARCoreAPP (ou seu nome escolhido)
+     - Nome: BugabooXR (ou seu nome escolhido)
      - Bundle ID: `com.unity.template.armobile` (ou personalize)
      - Platform: iOS
 
@@ -214,7 +214,7 @@ Se tiver acesso a um Mac:
 
 ```bash
 # Abrir projeto no Xcode
-open ios-build/ARCoreAPP.xcodeproj
+open ios-build/BugabooXR.xcodeproj
 
 # Build para verificar que não há erros
 # Product > Build (Cmd+B)
@@ -240,7 +240,7 @@ No **App Store Connect**:
 
 2. **Configure Source Control**:
    - Provider: GitHub
-   - Repository: `tiagoggl12/ARCoreAPP`
+   - Repository: `tiagoggl12/BugabooXR`
    - Branch: `xcode-project`
 
 3. **Create Workflow**:

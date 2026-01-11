@@ -23,7 +23,7 @@ on:
 env:
   UNITY_VERSION: auto  # Auto-detect from ProjectSettings/ProjectVersion.txt (6000.3.3f1)
   PROJECT_PATH: .
-  BUILD_NAME: ARCoreAPP
+  BUILD_NAME: BugabooXR
 
 jobs:
   # Job 1: C# Linting and Code Quality

@@ -46,7 +46,7 @@ Testadores recebem notificação
 
    **Platforms**: ☑️ iOS
 
-   **Name**: `ARCoreAPP` (ou seu nome preferido)
+   **Name**: `BugabooXR` (ou seu nome preferido)
    - Este é o nome que aparecerá na App Store
    - Pode ser mudado depois
 
@@ -105,11 +105,11 @@ Após criar, você estará na página do app. Configure:
    - Autorize "Xcode Cloud" a acessar seus repositórios
    - Selecione:
      - ☑️ All repositories, OU
-     - ☑️ Only select repositories → `ARCoreAPP`
+     - ☑️ Only select repositories → `BugabooXR`
    - Clique **"Install & Authorize"**
 
 5. **Select Repository**:
-   - Repository: `tiagoggl12/ARCoreAPP`
+   - Repository: `tiagoggl12/BugabooXR`
    - Clique **"Next"**
 
 ### 2.2 Escolher Branch e Projeto
@@ -136,7 +136,7 @@ Antes de continuar no Xcode Cloud, precisamos gerar o projeto Xcode.
 
 **Via GitHub UI**:
 
-1. Vá para https://github.com/tiagoggl12/ARCoreAPP
+1. Vá para https://github.com/tiagoggl12/BugabooXR
 2. Clique na aba **"Actions"**
 3. No sidebar esquerdo, clique em **"Generate Xcode Project for iOS"**
 4. Clique no botão **"Run workflow"** (lado direito)
@@ -165,7 +165,7 @@ Após workflow completar:
    - No dropdown de branches (topo esquerdo), selecione `xcode-project`
 
 2. Verifique que existe uma pasta `ios-build/` com:
-   - `ios-build/ARCoreAPP.xcodeproj`
+   - `ios-build/BugabooXR.xcodeproj`
    - Arquivos `.h`, `.m`, `.mm`
    - Pasta `Data/`
    - Pasta `Libraries/`
@@ -389,7 +389,7 @@ Se aparecer "Missing Compliance":
 
 2. Faça login com seu Apple ID (mesmo da Developer Account)
 
-3. O app **"ARCoreAPP"** aparecerá automaticamente
+3. O app **"BugabooXR"** aparecerá automaticamente
 
 4. Clique **"Install"**
 
@@ -474,7 +474,7 @@ git push origin main
 
 **Solução**:
 1. Re-execute workflow `generate-xcode-project.yml`
-2. Verifique que `ios-build/ARCoreAPP.xcodeproj` existe
+2. Verifique que `ios-build/BugabooXR.xcodeproj` existe
 3. Certifique-se que Unity Editor está fechado durante geração
 
 ### Erro: "Code Signing Failed"
@@ -562,7 +562,7 @@ git push origin main
 
 - **Apple Developer Support**: https://developer.apple.com/support/
 - **Xcode Cloud Forums**: https://developer.apple.com/forums/tags/xcode-cloud
-- **Projeto GitHub Issues**: https://github.com/tiagoggl12/ARCoreAPP/issues
+- **Projeto GitHub Issues**: https://github.com/tiagoggl12/BugabooXR/issues
 
 ---
 

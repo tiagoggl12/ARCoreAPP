@@ -1,4 +1,4 @@
-# ARCore Unity App
+# Bugaboo XR
 
 Unity 6 AR application with ARCore and ARKit support for cross-platform mobile AR experiences.
 

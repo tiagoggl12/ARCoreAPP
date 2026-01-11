@@ -12,7 +12,7 @@ Checklist rápido para primeiro deploy no TestFlight via Xcode Cloud.
 ## ☐ App Store Connect Setup (10 min)
 
 - [ ] Criar app no App Store Connect
-  - Nome: ARCoreAPP
+  - Nome: BugabooXR
   - Bundle ID: `com.unity.template.armobile`
   - SKU: arcore-app-001
 - [ ] Configurar Age Rating
@@ -22,7 +22,7 @@ Checklist rápido para primeiro deploy no TestFlight via Xcode Cloud.
 
 - [ ] App Store Connect > Xcode Cloud > "Connect to GitHub"
 - [ ] Autorizar Xcode Cloud no GitHub
-- [ ] Selecionar repositório: `tiagoggl12/ARCoreAPP`
+- [ ] Selecionar repositório: `tiagoggl12/BugabooXR`
 - [ ] Selecionar branch: `xcode-project` ✅ **JÁ EXISTE**
 
 ## ☐ Generate Xcode Project (15-20 min)
@@ -67,7 +67,7 @@ Checklist rápido para primeiro deploy no TestFlight via Xcode Cloud.
 
 - [ ] Instalar app TestFlight no iPhone/iPad
 - [ ] Fazer login com Apple ID (mesmo da Developer Account)
-- [ ] Verificar que ARCoreAPP aparece
+- [ ] Verificar que BugabooXR aparece
 - [ ] Install e testar! 🎉
 
 ---
