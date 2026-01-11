@@ -85,19 +85,38 @@ jobs:
       - name: Commit Xcode Project to xcode-project Branch
         if: github.event.inputs.push_to_branch == 'true' || github.event_name == 'push'
         run: |
-          # Create or checkout xcode-project branch
+          # Fetch or create xcode-project branch
           git fetch origin xcode-project:xcode-project || git branch xcode-project
           git checkout xcode-project
 
-          # Remove old Xcode project if exists
-          rm -rf ios-build
+          # Remove ALL Unity project files (keep only .git directory)
+          find . -maxdepth 1 ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} + 2>/dev/null || true
 
-          # Copy new Xcode project
+          # Copy ONLY the Xcode project
           mkdir -p ios-build
           cp -r ${{ env.XCODE_PROJECT_PATH }}/* ios-build/
 
-          # Add and commit
-          git add ios-build
+          # Create README for this branch
+          cat > README.md << 'EOF'
+          # Xcode Project Branch
+
+          This branch contains ONLY the generated Xcode project for Xcode Cloud.
+
+          **DO NOT manually edit this branch.**
+
+          ## Contents
+          - `ios-build/` - Generated Xcode project from Unity
+
+          ## Xcode Cloud Setup
+          - Branch: `xcode-project`
+          - Project: `ios-build/Unity-iPhone.xcodeproj`
+          - Scheme: `Unity-iPhone`
+          EOF
+
+          # Stage all changes (additions and deletions)
+          git add -A
+
+          # Commit
           git commit -m "Update Xcode project from Unity (build ${{ github.run_number }})" || echo "No changes to commit"
 
           # Push to branch
