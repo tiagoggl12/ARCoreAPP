@@ -176,12 +176,12 @@ jobs:
         include:
           # APK build
           - build_type: APK
-            androidExportType: androidPackage
+            app_bundle: false
             condition_check: APK
             retention: 30
           # AAB build
           - build_type: AAB
-            androidExportType: androidAppBundle
+            app_bundle: true
             condition_check: AAB
             retention: 90
     steps:
