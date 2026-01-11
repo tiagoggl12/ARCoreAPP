@@ -79,6 +79,8 @@ This project includes a complete CI/CD setup for automated building, testing, an
 
 - [CLAUDE.md](CLAUDE.md) - Architecture and development guidance
 - [CI-CD-SETUP.md](CI-CD-SETUP.md) - CI/CD configuration and usage
+- [XCODE-CLOUD-SETUP.md](XCODE-CLOUD-SETUP.md) - Complete Xcode Cloud & TestFlight setup guide
+- [TESTFLIGHT-CHECKLIST.md](TESTFLIGHT-CHECKLIST.md) - Quick checklist for TestFlight deployment
 
 ## Platform-Specific Notes
 
