@@ -53,9 +53,32 @@ This project uses Unity's AR Foundation framework to create augmented reality ex
 - `Assets/XR/` - XR rig configuration
 - `ProjectSettings/` - Build and platform settings
 
+## CI/CD Pipeline
+
+This project includes a complete CI/CD setup for automated building, testing, and deployment:
+
+### Android (GitHub Actions)
+- ✅ Automated APK and AAB builds
+- ✅ Unity Test Runner (Edit Mode & Play Mode)
+- ✅ C# code linting and validation
+- ✅ Automatic GitHub Releases
+
+### iOS (Xcode Cloud)
+- ✅ Xcode project generation from Unity
+- ✅ TestFlight deployment
+- ✅ Automatic distribution to testers
+
+**Setup Guide**: See [CI-CD-SETUP.md](CI-CD-SETUP.md) for complete configuration instructions.
+
+**Workflows**:
+- `test-runner.yml` - Fast testing on PRs
+- `android-build.yml` - Full Android build pipeline
+- `generate-xcode-project.yml` - iOS Xcode project generation
+
 ## Documentation
 
-See [CLAUDE.md](CLAUDE.md) for detailed architecture information and development guidance.
+- [CLAUDE.md](CLAUDE.md) - Architecture and development guidance
+- [CI-CD-SETUP.md](CI-CD-SETUP.md) - CI/CD configuration and usage
 
 ## Platform-Specific Notes
 

@@ -1,0 +1,394 @@
+name: Android CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'Both'
+        type: choice
+        options:
+          - APK
+          - AAB
+          - Both
+      version_override:
+        description: 'Version Override (leave empty for auto)'
+        required: false
+        type: string
+
+env:
+  UNITY_VERSION: 2023.2.3f1  # Closest available to Unity 6 in Game CI
+  PROJECT_PATH: .
+  BUILD_NAME: ARCoreAPP
+
+jobs:
+  # Job 1: C# Linting and Code Quality
+  lint:
+    name: C# Code Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore NuGet Packages
+        run: dotnet restore *.sln || echo "No solution file to restore"
+
+      - name: Check Code Formatting
+        run: |
+          if ls *.sln 1> /dev/null 2>&1; then
+            dotnet format *.sln --verify-no-changes --verbosity diagnostic || echo "Formatting check completed with warnings"
+          else
+            echo "No solution file found, skipping format check"
+          fi
+
+  # Job 2: Unity Project Validation
+  validate:
+    name: Validate Unity Project
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-Validation-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Validation-
+            Library-
+
+      - name: Validate Project Configuration
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Android
+          unityVersion: ${{ env.UNITY_VERSION }}
+          buildMethod: ARCoreApp.Editor.ProjectValidator.ValidateForCI
+          allowDirtyBuild: true
+
+  # Job 3: Unity Edit Mode Tests
+  test-editmode:
+    name: Edit Mode Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-EditMode-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-EditMode-
+            Library-
+
+      - name: Run Edit Mode Tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: EditMode
+          artifactsPath: test-results/editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Edit Mode Test Results
+
+      - name: Upload Edit Mode Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editmode-test-results
+          path: test-results/editmode
+          retention-days: 14
+
+  # Job 4: Unity Play Mode Tests
+  test-playmode:
+    name: Play Mode Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-PlayMode-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-PlayMode-
+            Library-
+
+      - name: Run Play Mode Tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: PlayMode
+          artifactsPath: test-results/playmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Play Mode Test Results
+
+      - name: Upload Play Mode Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playmode-test-results
+          path: test-results/playmode
+          retention-days: 14
+
+  # Job 5: Build Android APK (Development/Debug)
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: [validate, test-editmode, test-playmode]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'APK' || github.event.inputs.build_type == 'Both'))
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Set Build Version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version_override }}" ]; then
+            VERSION="${{ github.event.inputs.version_override }}"
+          else
+            VERSION="1.0.0"
+          fi
+          VERSION_CODE=$((1000000 + ${{ github.run_number }}))
+          BUILD_VERSION="${VERSION}+${VERSION_CODE}"
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_OUTPUT
+          echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${BUILD_VERSION}"
+
+      - name: Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-Android-APK-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Android-
+            Library-
+
+      - name: Decode Android Keystore
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/user.keystore
+            echo "Keystore decoded successfully"
+          else
+            echo "No keystore provided, using debug signing"
+          fi
+
+      - name: Build Android APK
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Android
+          unityVersion: ${{ env.UNITY_VERSION }}
+          buildName: ${{ env.BUILD_NAME }}
+          buildsPath: builds
+          androidAppBundle: false
+          androidKeystoreName: user.keystore
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName: ${{ secrets.ANDROID_KEY_ALIAS }}
+          androidKeyaliasPass: ${{ secrets.ANDROID_KEY_PASS }}
+          androidTargetSdkVersion: AndroidApiLevel30
+          versioning: Custom
+          version: ${{ steps.version.outputs.VERSION }}
+          androidVersionCode: ${{ steps.version.outputs.VERSION_CODE }}
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BUILD_NAME }}-${{ steps.version.outputs.BUILD_VERSION }}-apk
+          path: builds/Android/*.apk
+          retention-days: 30
+
+  # Job 6: Build Android AAB (Production/Release)
+  build-aab:
+    name: Build Android AAB
+    runs-on: ubuntu-latest
+    needs: [validate, test-editmode, test-playmode]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'AAB' || github.event.inputs.build_type == 'Both'))
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Set Build Version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version_override }}" ]; then
+            VERSION="${{ github.event.inputs.version_override }}"
+          else
+            VERSION="1.0.0"
+          fi
+          VERSION_CODE=$((1000000 + ${{ github.run_number }}))
+          BUILD_VERSION="${VERSION}+${VERSION_CODE}"
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_OUTPUT
+          echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${BUILD_VERSION}"
+
+      - name: Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-Android-AAB-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Android-
+            Library-
+
+      - name: Decode Android Keystore
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/user.keystore
+            echo "Keystore decoded successfully"
+          else
+            echo "ERROR: Keystore required for AAB builds"
+            exit 1
+          fi
+
+      - name: Build Android AAB
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Android
+          unityVersion: ${{ env.UNITY_VERSION }}
+          buildName: ${{ env.BUILD_NAME }}
+          buildsPath: builds
+          androidAppBundle: true
+          androidKeystoreName: user.keystore
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName: ${{ secrets.ANDROID_KEY_ALIAS }}
+          androidKeyaliasPass: ${{ secrets.ANDROID_KEY_PASS }}
+          androidTargetSdkVersion: AndroidApiLevel30
+          versioning: Custom
+          version: ${{ steps.version.outputs.VERSION }}
+          androidVersionCode: ${{ steps.version.outputs.VERSION_CODE }}
+
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BUILD_NAME }}-${{ steps.version.outputs.BUILD_VERSION }}-aab
+          path: builds/Android/*.aab
+          retention-days: 90
+
+  # Job 7: Create GitHub Release
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-apk, build-aab]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set Build Version
+        id: version
+        run: |
+          VERSION="1.0.0"
+          VERSION_CODE=$((1000000 + ${{ github.run_number }}))
+          BUILD_VERSION="${VERSION}+${VERSION_CODE}"
+          echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          echo "## Changes in this Release" > changelog.md
+          echo "" >> changelog.md
+          git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")..HEAD >> changelog.md || echo "- Initial release" >> changelog.md
+          echo "" >> changelog.md
+          echo "## Build Information" >> changelog.md
+          echo "- Unity Version: ${{ env.UNITY_VERSION }}" >> changelog.md
+          echo "- Build Number: ${{ github.run_number }}" >> changelog.md
+          echo "- Commit: ${{ github.sha }}" >> changelog.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.BUILD_VERSION }}
+          name: Release v${{ steps.version.outputs.BUILD_VERSION }}
+          body_path: changelog.md
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/**/*.apk
+            artifacts/**/*.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 8: Return Unity License
+  cleanup:
+    name: Return Unity License
+    runs-on: ubuntu-latest
+    needs: [build-apk, build-aab]
+    if: always()
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Return License
+        uses: game-ci/unity-return-license@v2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}

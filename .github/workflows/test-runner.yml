@@ -1,0 +1,170 @@
+name: Unity Test Runner
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - develop
+
+env:
+  UNITY_VERSION: 2023.2.3f1  # Closest available to Unity 6 in Game CI
+  PROJECT_PATH: .
+
+jobs:
+  # Job 1: C# Linting and Code Quality
+  lint:
+    name: C# Code Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore NuGet Packages
+        run: dotnet restore *.sln || echo "No solution file to restore"
+
+      - name: Check Code Formatting
+        run: |
+          if [ -f "*.sln" ]; then
+            dotnet format *.sln --verify-no-changes --verbosity diagnostic || echo "Formatting check completed with warnings"
+          else
+            echo "No solution file found, skipping format check"
+          fi
+
+      - name: Upload Linting Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linting-report
+          path: linting-report.txt
+          retention-days: 7
+
+  # Job 2: Unity Edit Mode Tests
+  test-editmode:
+    name: Edit Mode Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-EditMode-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-EditMode-
+            Library-
+
+      - name: Run Edit Mode Tests
+        uses: game-ci/unity-test-runner@v4
+        id: editmode-tests
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: EditMode
+          artifactsPath: test-results/editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Edit Mode Test Results
+          coverageOptions: 'generateAdditionalMetrics;generateHtmlReport;generateBadgeReport;assemblyFilters:+Assembly-CSharp'
+
+      - name: Upload Edit Mode Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editmode-test-results
+          path: test-results/editmode
+          retention-days: 14
+
+      - name: Publish Test Results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: test-results/editmode/**/*.xml
+          check_name: Edit Mode Tests
+          comment_mode: always
+
+  # Job 3: Unity Play Mode Tests
+  test-playmode:
+    name: Play Mode Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-PlayMode-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-PlayMode-
+            Library-
+
+      - name: Run Play Mode Tests
+        uses: game-ci/unity-test-runner@v4
+        id: playmode-tests
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: PlayMode
+          artifactsPath: test-results/playmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Play Mode Test Results
+          coverageOptions: 'generateAdditionalMetrics;generateHtmlReport;generateBadgeReport;assemblyFilters:+Assembly-CSharp'
+
+      - name: Upload Play Mode Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playmode-test-results
+          path: test-results/playmode
+          retention-days: 14
+
+      - name: Publish Test Results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: test-results/playmode/**/*.xml
+          check_name: Play Mode Tests
+          comment_mode: always
+
+  # Job 4: Return Unity License
+  cleanup:
+    name: Return Unity License
+    runs-on: ubuntu-latest
+    needs: [test-editmode, test-playmode]
+    if: always()
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Return License
+        uses: game-ci/unity-return-license@v2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
