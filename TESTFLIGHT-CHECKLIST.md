@@ -23,7 +23,7 @@ Checklist rápido para primeiro deploy no TestFlight via Xcode Cloud.
 - [ ] App Store Connect > Xcode Cloud > "Connect to GitHub"
 - [ ] Autorizar Xcode Cloud no GitHub
 - [ ] Selecionar repositório: `tiagoggl12/ARCoreAPP`
-- [ ] Selecionar branch: `xcode-project`
+- [ ] Selecionar branch: `xcode-project` ✅ **JÁ EXISTE**
 
 ## ☐ Generate Xcode Project (15-20 min)
 

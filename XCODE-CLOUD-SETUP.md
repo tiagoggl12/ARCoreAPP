@@ -115,10 +115,9 @@ Após criar, você estará na página do app. Configure:
 ### 2.2 Escolher Branch e Projeto
 
 1. **Select Branch**:
-   - Branch: `xcode-project`
+   - Branch: `xcode-project` ✅ **JÁ EXISTE NO REPOSITÓRIO**
    - ⚠️ **IMPORTANTE**: Não use `main`!
-   - Use `xcode-project` (branch que contém o projeto Xcode exportado)
-   - Se o branch não existir ainda, clique "Next" e criaremos depois
+   - Use `xcode-project` (branch dedicada para o projeto Xcode exportado)
 
 2. **Select Xcode Project/Workspace**:
    - ⚠️ Xcode Cloud tentará detectar automaticamente
