@@ -56,15 +56,7 @@ jobs:
           git add .
           git reset --hard
 
-      # Step 3: Activate Unity License
-      - name: 🔑 Activate Unity License
-        uses: game-ci/unity-activate@v2
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-
-      # Step 4: Cache Unity Library (automatically restored and saved)
+      # Step 3: Cache Unity Library (automatically restored and saved)
       - name: 📚 Cache Unity Library
         uses: actions/cache@v5
         with:
