@@ -192,7 +192,9 @@ jobs:
             cp -r build/iOS/* "$TEMP_DIR/" || echo "No iOS build found"
           fi
 
-          # Delete local xcode-project branch if it exists (to avoid conflicts)
+          # Clean workspace and delete local xcode-project branch if exists
+          git reset --hard HEAD
+          git clean -fd
           git branch -D xcode-project 2>/dev/null || true
 
           # Fetch and checkout xcode-project branch (or create orphan if doesn't exist on remote)
