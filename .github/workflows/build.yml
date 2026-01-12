@@ -1,0 +1,218 @@
+name: Build 🚀
+
+on: [push, pull_request]
+
+jobs:
+  # Job para build Android
+  android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Free up disk space
+      - name: 🧹 Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo docker system prune -af
+          df -h
+
+      # Step 2: Checkout
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Step 3: Setup Git LFS Cache
+      - name: 📋 Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: 💾 Restore LFS cache
+        uses: actions/cache@v5
+        id: lfs-cache
+        with:
+          path: .git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: 📦 Pull LFS files
+        run: |
+          git lfs pull
+          git add .
+          git reset --hard
+
+      # Step 4: Cache Unity Library
+      - name: 📚 Cache Unity Library
+        uses: actions/cache@v5
+        with:
+          path: Library
+          key: Library-Android-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Android-
+            Library-
+
+      # Step 5: Build Android
+      - name: 🔨 Build Android project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Android
+          allowDirtyBuild: true
+
+      # Step 6: Upload Android artifacts
+      - name: 📤 Upload Android build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Build
+          path: build/Android
+
+      # Step 7: Extract version
+      - name: 🏷️ Extract version
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: version
+        run: |
+          VERSION=$(grep "bundleVersion:" ProjectSettings/ProjectSettings.asset | sed 's/.*bundleVersion: //')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          RELEASE_VERSION="v${VERSION}-${SHORT_SHA}"
+          echo "version=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
+          echo "unity_version=${VERSION}" >> $GITHUB_OUTPUT
+
+      # Step 8: Create GitHub Release
+      - name: 🚀 Create Android Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## 📱 Android Build - Version ${{ steps.version.outputs.unity_version }}
+
+            ### 📋 Build Info
+            - **Unity Version**: ${{ steps.version.outputs.unity_version }}
+            - **Commit**: ${{ github.sha }}
+            - **Branch**: ${{ github.ref_name }}
+            - **Build Date**: ${{ github.event.head_commit.timestamp }}
+
+            ### 📝 Changes
+            ${{ github.event.head_commit.message }}
+
+            ### 📥 Download
+            Baixe o APK anexo abaixo para instalar no seu dispositivo Android.
+          files: |
+            build/Android/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job para build iOS
+  ios:
+    name: Build iOS Xcode Project
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Free up disk space
+      - name: 🧹 Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo docker system prune -af
+          df -h
+
+      # Step 2: Checkout
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Step 3: Setup Git LFS Cache
+      - name: 📋 Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: 💾 Restore LFS cache
+        uses: actions/cache@v5
+        id: lfs-cache
+        with:
+          path: .git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: 📦 Pull LFS files
+        run: |
+          git lfs pull
+          git add .
+          git reset --hard
+
+      # Step 4: Cache Unity Library
+      - name: 📚 Cache Unity Library
+        uses: actions/cache@v5
+        with:
+          path: Library
+          key: Library-iOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-iOS-
+            Library-
+
+      # Step 5: Build iOS
+      - name: 🔨 Build iOS Xcode project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: iOS
+          allowDirtyBuild: true
+
+      # Step 6: Upload iOS artifacts
+      - name: 📤 Upload iOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: iOS-Xcode-Build
+          path: build/iOS
+
+      # Step 7: Deploy to xcode-project branch
+      - name: 🚀 Deploy to xcode-project branch
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          # Configure git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Fetch the xcode-project branch
+          git fetch origin xcode-project || git checkout --orphan xcode-project
+
+          # Create a temporary directory for the new content
+          TEMP_DIR=$(mktemp -d)
+
+          # Copy the iOS build to temp directory
+          cp -r build/iOS/* "$TEMP_DIR/"
+
+          # Switch to xcode-project branch
+          git checkout xcode-project || git checkout --orphan xcode-project
+
+          # Remove all existing content
+          git rm -rf . || true
+          rm -rf * .* 2>/dev/null || true
+
+          # Copy the new build content
+          cp -r "$TEMP_DIR"/* .
+
+          # Add all files
+          git add -A
+
+          # Commit with build info
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          git commit -m "iOS Build from commit ${SHORT_SHA}" \
+                     -m "Source commit: ${{ github.sha }}" \
+                     -m "Build date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" || true
+
+          # Push to xcode-project branch
+          git push origin xcode-project --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
