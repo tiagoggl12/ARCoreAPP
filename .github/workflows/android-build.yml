@@ -7,6 +7,16 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-latest
     steps:
+      # Step 0: Free up disk space
+      - name: 🧹 Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h
+
       # Step 1: Checkout
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
