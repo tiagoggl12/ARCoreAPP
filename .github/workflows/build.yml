@@ -194,7 +194,7 @@ jobs:
 
           # Clean workspace and delete local xcode-project branch if exists
           git reset --hard HEAD
-          git clean -fd
+          sudo git clean -fdx || git clean -fdx || true
           git branch -D xcode-project 2>/dev/null || true
 
           # Fetch and checkout xcode-project branch (or create orphan if doesn't exist on remote)
