@@ -18,12 +18,6 @@ on:
         required: false
         default: true
         type: boolean
-      create_release:
-        description: 'Create GitHub Release with APK'
-        required: false
-        default: false
-        type: boolean
-
   # Também pode ser acionado por push (comentado por padrão)
   # push:
   #   branches: [ main, develop ]
@@ -32,9 +26,6 @@ jobs:
   build:
     name: Build on Self-Hosted Runner
     runs-on: [self-hosted, macOS]
-
-    permissions:
-      contents: write  # Necessário para criar releases
 
     steps:
       # Step 1: Checkout repository
@@ -52,28 +43,6 @@ jobs:
           git lfs pull
           git add .
           git reset --hard
-
-      # Step 2.5: Extract version from Unity project
-      - name: 📋 Extract project version
-        id: version
-        run: |
-          # Extrair versão do ProjectSettings.asset
-          VERSION=$(grep -E "bundleVersion:" ProjectSettings/ProjectSettings.asset | sed 's/.*bundleVersion: //')
-
-          if [ -z "$VERSION" ]; then
-            VERSION="0.0.1"
-            echo "⚠️ Versão não encontrada, usando default: $VERSION"
-          else
-            echo "✅ Versão do projeto: $VERSION"
-          fi
-
-          # Criar tag única com timestamp
-          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          TAG_NAME="v${VERSION}-${TIMESTAMP}"
-
-          echo "version=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "unity_version=$VERSION" >> $GITHUB_OUTPUT
-          echo "📌 Tag da release: $TAG_NAME"
 
       # Step 3: Display system info
       - name: 💻 Display system info
@@ -210,31 +179,6 @@ jobs:
           name: Android-Build-SelfHosted
           path: build/Android
           if-no-files-found: warn
-
-      # Step 6.5: Create GitHub Release (if enabled)
-      - name: 🚀 Create Android Release
-        if: github.event.inputs.create_release == 'true' && (github.event.inputs.platform == 'Android' || github.event.inputs.platform == 'Both')
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
-          body: |
-            ## 📱 Android Build - Version ${{ steps.version.outputs.unity_version }}
-
-            ### 📋 Build Info
-            - **Unity Version**: ${{ steps.version.outputs.unity_version }}
-            - **Commit**: ${{ github.sha }}
-            - **Branch**: ${{ github.ref_name }}
-            - **Build Date**: ${{ github.event.repository.updated_at }}
-
-            ### 📥 Download
-            Baixe o APK anexo abaixo para instalar no seu dispositivo Android.
-          files: |
-            build/Android/*.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Step 7: Build summary
       - name: 📊 Build Summary
