@@ -1,0 +1,76 @@
+# Fastlane configuration for BugabooXR iOS deployment
+
+default_platform(:ios)
+
+platform :ios do
+
+  # Lane para fazer upload para TestFlight
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    # Incrementar build number automaticamente
+    increment_build_number(
+      build_number: latest_testflight_build_number + 1,
+      xcodeproj: "build/iOS/Unity-iPhone.xcodeproj"
+    )
+
+    # Build the app
+    build_app(
+      project: "build/iOS/Unity-iPhone.xcodeproj",
+      scheme: "Unity-iPhone",
+      export_method: "app-store",
+      output_directory: "./build/iOS/output",
+      output_name: "BugabooXR.ipa"
+    )
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      distribute_external: false,
+      notify_external_testers: false
+    )
+
+    # Notificação de sucesso
+    puts "✅ Build uploaded to TestFlight successfully!"
+  end
+
+  # Lane para release na App Store
+  desc "Deploy to App Store"
+  lane :release do
+    # Build the app
+    build_app(
+      project: "build/iOS/Unity-iPhone.xcodeproj",
+      scheme: "Unity-iPhone",
+      export_method: "app-store"
+    )
+
+    # Upload to App Store
+    upload_to_app_store(
+      skip_metadata: false,
+      skip_screenshots: false,
+      submit_for_review: false
+    )
+  end
+
+  # Lane apenas para build (sem upload)
+  desc "Build iOS IPA"
+  lane :build do
+    build_app(
+      project: "build/iOS/Unity-iPhone.xcodeproj",
+      scheme: "Unity-iPhone",
+      export_method: "app-store",
+      output_directory: "./build/iOS/output",
+      output_name: "BugabooXR.ipa"
+    )
+  end
+
+  # Lane para setup de certificados usando match
+  desc "Setup signing certificates"
+  lane :setup_signing do
+    match(
+      type: "appstore",
+      readonly: true
+    )
+  end
+
+end

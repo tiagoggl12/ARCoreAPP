@@ -1,0 +1,163 @@
+name: Self-Hosted Build 🖥️
+
+on:
+  # Permite execução manual do workflow
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: true
+        default: 'iOS'
+        type: choice
+        options:
+          - iOS
+          - Android
+          - Both
+      upload_artifacts:
+        description: 'Upload build artifacts'
+        required: false
+        default: true
+        type: boolean
+
+  # Também pode ser acionado por push (comentado por padrão)
+  # push:
+  #   branches: [ main, develop ]
+
+jobs:
+  build:
+    name: Build on Self-Hosted Runner
+    runs-on: [self-hosted, macOS]
+
+    steps:
+      # Step 1: Checkout repository
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Step 2: Setup Git LFS
+      - name: 📋 Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: 📦 Pull LFS files
+        run: |
+          git lfs pull
+          git add .
+          git reset --hard
+
+      # Step 3: Display system info
+      - name: 💻 Display system info
+        run: |
+          echo "🖥️  System Information:"
+          echo "Runner: $(hostname)"
+          echo "OS: $(sw_vers -productName) $(sw_vers -productVersion)"
+          echo "Architecture: $(uname -m)"
+          echo "CPU: $(sysctl -n machdep.cpu.brand_string)"
+          echo "Memory: $(sysctl -n hw.memsize | awk '{print $0/1024/1024/1024 " GB"}')"
+          echo "Disk space:"
+          df -h .
+          echo ""
+          echo "🔧 Unity Installation:"
+          if [ -d "/Applications/Unity/Hub/Editor" ]; then
+            ls -la /Applications/Unity/Hub/Editor/ | grep "^d" || echo "No Unity versions found"
+          else
+            echo "Unity Hub not found at default location"
+          fi
+
+      # Step 4: Build iOS (if selected)
+      - name: 🍎 Build iOS Xcode project
+        if: github.event.inputs.platform == 'iOS' || github.event.inputs.platform == 'Both'
+        run: |
+          echo "Building iOS project..."
+          # Ajuste o caminho do Unity conforme sua instalação
+          UNITY_PATH="/Applications/Unity/Hub/Editor/*/Unity.app/Contents/MacOS/Unity"
+          UNITY_PATH=$(echo $UNITY_PATH)
+
+          if [ -f "$UNITY_PATH" ]; then
+            "$UNITY_PATH" \
+              -quit \
+              -batchmode \
+              -nographics \
+              -silent-crashes \
+              -logFile "$(pwd)/build-ios.log" \
+              -projectPath "$(pwd)" \
+              -buildTarget iOS \
+              -executeMethod BuildCommand.PerformBuild || true
+
+            echo "📄 Build log:"
+            cat build-ios.log || echo "No log file found"
+          else
+            echo "⚠️  Unity not found. Please install Unity or adjust the UNITY_PATH"
+            echo "Skipping iOS build..."
+          fi
+
+      # Step 5: Build Android (if selected)
+      - name: 🤖 Build Android APK
+        if: github.event.inputs.platform == 'Android' || github.event.inputs.platform == 'Both'
+        run: |
+          echo "Building Android project..."
+          UNITY_PATH="/Applications/Unity/Hub/Editor/*/Unity.app/Contents/MacOS/Unity"
+          UNITY_PATH=$(echo $UNITY_PATH)
+
+          if [ -f "$UNITY_PATH" ]; then
+            "$UNITY_PATH" \
+              -quit \
+              -batchmode \
+              -nographics \
+              -silent-crashes \
+              -logFile "$(pwd)/build-android.log" \
+              -projectPath "$(pwd)" \
+              -buildTarget Android \
+              -executeMethod BuildCommand.PerformBuild || true
+
+            echo "📄 Build log:"
+            cat build-android.log || echo "No log file found"
+          else
+            echo "⚠️  Unity not found. Please install Unity or adjust the UNITY_PATH"
+            echo "Skipping Android build..."
+          fi
+
+      # Step 6: Upload artifacts (optional)
+      - name: 📤 Upload iOS build
+        if: (github.event.inputs.platform == 'iOS' || github.event.inputs.platform == 'Both') && github.event.inputs.upload_artifacts == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: iOS-Build-SelfHosted
+          path: build/iOS
+          if-no-files-found: warn
+
+      - name: 📤 Upload Android build
+        if: (github.event.inputs.platform == 'Android' || github.event.inputs.platform == 'Both') && github.event.inputs.upload_artifacts == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Build-SelfHosted
+          path: build/Android
+          if-no-files-found: warn
+
+      # Step 7: Build summary
+      - name: 📊 Build Summary
+        if: always()
+        run: |
+          echo "## 🎉 Build completed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Build Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platform**: ${{ github.event.inputs.platform || 'Not specified' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: $(hostname)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d "build" ]; then
+            echo "### 📦 Build Output" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            ls -lah build/ >> $GITHUB_STEP_SUMMARY || echo "No build directory" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # Step 8: Cleanup (opcional - descomente se necessário)
+      # - name: 🧹 Cleanup
+      #   if: always()
+      #   run: |
+      #     # Limpar arquivos temporários se necessário
+      #     rm -f build-*.log
+      #     rm -f .lfs-assets-id

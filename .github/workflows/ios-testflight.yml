@@ -1,0 +1,139 @@
+name: iOS TestFlight Deploy 🚀
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'Build number (leave empty for auto-increment)'
+        required: false
+        type: string
+
+jobs:
+  deploy:
+    name: Build and Deploy to TestFlight
+    runs-on: [self-hosted, macOS]
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: 📦 Pull LFS files
+        run: |
+          git lfs pull
+          git add .
+          git reset --hard
+
+      # Step 1: Build iOS com Unity
+      - name: 🔨 Build iOS Xcode project with Unity
+        run: |
+          UNITY_PATH="/Applications/Unity/Hub/Editor/*/Unity.app/Contents/MacOS/Unity"
+          UNITY_PATH=$(echo $UNITY_PATH)
+
+          if [ -f "$UNITY_PATH" ]; then
+            "$UNITY_PATH" \
+              -quit \
+              -batchmode \
+              -nographics \
+              -silent-crashes \
+              -logFile "$(pwd)/build-ios.log" \
+              -projectPath "$(pwd)" \
+              -buildTarget iOS \
+              -executeMethod BuildCommand.PerformBuild
+
+            echo "✅ Unity build completed"
+            cat build-ios.log
+          else
+            echo "❌ Unity not found"
+            exit 1
+          fi
+
+      # Step 2: Setup Fastlane
+      - name: 🚀 Install Fastlane
+        run: |
+          # Instalar fastlane se não estiver instalado
+          if ! command -v fastlane &> /dev/null; then
+            sudo gem install fastlane -NV
+          fi
+          fastlane --version
+
+      # Step 3: Setup provisioning profiles e certificates
+      - name: 🔐 Setup signing
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: |
+          echo "Setting up signing certificates..."
+          # Configurar keychain temporário
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+      # Step 4: Build IPA com xcodebuild
+      - name: 📦 Archive and Export IPA
+        env:
+          XCODE_PROJECT_PATH: build/iOS/Unity-iPhone.xcodeproj
+        run: |
+          cd build/iOS
+
+          # Archive
+          xcodebuild archive \
+            -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -archivePath ./build/Unity-iPhone.xcarchive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            PROVISIONING_PROFILE_SPECIFIER="${{ secrets.PROVISIONING_PROFILE_NAME }}"
+
+          # Export IPA
+          xcodebuild -exportArchive \
+            -archivePath ./build/Unity-iPhone.xcarchive \
+            -exportPath ./build \
+            -exportOptionsPlist ExportOptions.plist
+
+          echo "✅ IPA created successfully"
+          ls -lh ./build/*.ipa
+
+      # Step 5: Upload to TestFlight
+      - name: 🚀 Upload to TestFlight
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: |
+          # Upload usando altool (método tradicional)
+          xcrun altool --upload-app \
+            --type ios \
+            --file build/iOS/build/*.ipa \
+            --apiKey $APP_STORE_CONNECT_API_KEY_ID \
+            --apiIssuer $APP_STORE_CONNECT_API_ISSUER_ID
+
+          # OU usando Fastlane (alternativa mais simples):
+          # cd build/iOS
+          # fastlane pilot upload --ipa build/*.ipa --skip_waiting_for_build_processing
+
+      # Step 6: Cleanup
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          security delete-keychain build.keychain || true
+          rm -rf build-ios.log
+
+      # Step 7: Notify
+      - name: 📢 Build Summary
+        if: always()
+        run: |
+          echo "## 🎉 TestFlight Deploy completed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Build Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: $(hostname)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 Check TestFlight: https://appstoreconnect.apple.com/" >> $GITHUB_STEP_SUMMARY
