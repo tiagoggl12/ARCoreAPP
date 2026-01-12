@@ -8,13 +8,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout
+      # Step 1: Free up disk space
+      - name: 🧹 Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo docker system prune -af
+          df -h
+
+      # Step 2: Checkout
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
         with:
           lfs: true
 
-      # Step 2: Setup Git LFS Cache
+      # Step 3: Setup Git LFS Cache
       - name: 📋 Create LFS file list
         run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
 
@@ -31,7 +41,7 @@ jobs:
           git add .
           git reset --hard
 
-      # Step 3: Cache Unity Library (automatically restored and saved)
+      # Step 4: Cache Unity Library (automatically restored and saved)
       - name: 📚 Cache Unity Library
         uses: actions/cache@v5
         with:
@@ -41,7 +51,7 @@ jobs:
             Library-${{ runner.os }}-
             Library-
 
-      # Step 4: Build
+      # Step 5: Build
       - name: 🔨 Build iOS Xcode project
         uses: game-ci/unity-builder@v4
         env:
@@ -52,14 +62,14 @@ jobs:
           targetPlatform: iOS
           allowDirtyBuild: true
 
-      # Step 5: Upload artifacts
+      # Step 6: Upload artifacts
       - name: 📤 Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: iOS-Xcode-Build
           path: build
 
-      # Step 6: Deploy to xcode-project branch
+      # Step 7: Deploy to xcode-project branch
       - name: 🚀 Deploy to xcode-project branch
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
